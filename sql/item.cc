@@ -37,6 +37,7 @@
                                        // REPORT_EXCEPT_NOT_FOUND,
                                        // find_item_in_list,
                                        // RESOLVED_AGAINST_ALIAS, ...
+#include "sql_column_policy.h"
 #include "sql_expression_cache.h"
 #include "sql_lex.h"                   // empty_clex_str
 #include "my_json_writer.h"            // for dbug_print_opt_trace()
@@ -3273,7 +3274,8 @@ Item_field::Item_field(THD *thd, Field *f)
   :Item_ident(thd, 0, null_clex_str,
               Lex_cstring_strlen(*f->table_name), f->field_name),
    item_equal(0),
-   have_privileges(NO_ACL), any_privileges(0)
+   have_privileges(NO_ACL), any_privileges(0),
+   column_policy_was_processed(false)
 {
   set_field(f);
   /*
@@ -3297,7 +3299,8 @@ Item_field::Item_field(THD *thd, Name_resolution_context *context_arg,
                        Field *f)
   :Item_ident(thd, context_arg, f->table->s->db,
               Lex_cstring_strlen(*f->table_name), f->field_name),
-   item_equal(0), have_privileges(NO_ACL), any_privileges(0)
+   item_equal(0), have_privileges(NO_ACL), any_privileges(0),
+   column_policy_was_processed(false)
 {
   /*
     We always need to provide Item_field with a fully qualified field
@@ -3341,7 +3344,8 @@ Item_field::Item_field(THD *thd, Name_resolution_context *context_arg,
                        const LEX_CSTRING &field_name_arg)
   :Item_ident(thd, context_arg, db_arg, table_name_arg, field_name_arg),
    field(0), item_equal(0),
-   have_privileges(NO_ACL), any_privileges(0)
+   have_privileges(NO_ACL), any_privileges(0),
+   column_policy_was_processed(false)
 {
   SELECT_LEX *select= thd->lex->current_select;
   collation.set(DERIVATION_IMPLICIT);
@@ -3359,7 +3363,8 @@ Item_field::Item_field(THD *thd, Item_field *item)
    field(item->field),
    item_equal(item->item_equal),
    have_privileges(item->have_privileges),
-   any_privileges(item->any_privileges)
+   any_privileges(item->any_privileges),
+   column_policy_was_processed(item->column_policy_was_processed)
 {
   collation.set(DERIVATION_IMPLICIT);
   with_flags|= item_with_t::FIELD;
@@ -6820,7 +6825,10 @@ mark_non_agg_field:
         select_lex->set_non_agg_field_used(true);
     }
   }
-  return check_ora_join(reference, outer_fixed);
+  if (check_ora_join(reference, outer_fixed))
+    return true;
+  return column_policy_rewrite_field(thd, this, reference,
+                                     column_policy_context(thd));
 
 error:
   context->process_error(thd);

@@ -3807,6 +3807,13 @@ public:
   privilege_t have_privileges;
   /* field need any privileges (for VIEW creation) */
   bool any_privileges;
+  /* Prevent applying the same policy again when a prepared tree is fixed. */
+  bool column_policy_was_processed;
+
+  bool column_policy_processed() const
+  { return column_policy_was_processed; }
+  void mark_column_policy_processed()
+  { column_policy_was_processed= true; }
 
 private:
   /*

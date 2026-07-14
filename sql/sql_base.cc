@@ -20,6 +20,7 @@
 #include "lex_ident_sys.h"
 #include "mariadb.h"
 #include "sql_base.h"                           // setup_table_map
+#include "sql_column_policy.h"
 #include "sql_list.h"
 #include "sql_priv.h"
 #include "unireg.h"
@@ -8316,6 +8317,16 @@ bool setup_fields(THD *thd, Ref_ptr_array ref_pointer_array,
       thd->column_usage= saved_column_usage;
       DBUG_PRINT("info", ("thd->column_usage: %d", thd->column_usage));
       DBUG_RETURN(TRUE); /* purecov: inspected */
+    }
+    item= *(it.ref());
+    if (item->type() == Item::FIELD_ITEM &&
+        column_policy_rewrite_field(thd, static_cast<Item_field *>(item),
+                                    it.ref(), column_policy_context(thd)))
+    {
+      lex->current_select->is_item_list_lookup= save_is_item_list_lookup;
+      lex->allow_sum_func= save_allow_sum_func;
+      thd->column_usage= saved_column_usage;
+      DBUG_RETURN(TRUE);
     }
     item= *(it.ref()); // Item might have changed in fix_fields()
     if (!ref.is_null())
